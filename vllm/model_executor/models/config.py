@@ -248,12 +248,24 @@ class Gemma4Config(VerifyAndUpdateConfig):
                     head_dims,
                 )
         elif vllm_config.attention_config.backend is None:
-            vllm_config.attention_config.backend = AttentionBackendEnum.TRITON_ATTN
-            logger.info(
-                "Gemma4 model has heterogeneous head dimensions "
-                "%s. FA4 not available, forcing TRITON_ATTN backend.",
-                head_dims,
-            )
+            from vllm.platforms import current_platform
+            from vllm.utils.flashinfer import has_flashinfer
+
+            if current_platform.is_cuda() and max_head_dim <= 512 and has_flashinfer():
+                vllm_config.attention_config.backend = AttentionBackendEnum.FLASHINFER
+                logger.info(
+                    "Gemma4 model has heterogeneous head dimensions %s. FA4 not "
+                    "available; using FLASHINFER, which serves all layers "
+                    "uniformly.",
+                    head_dims,
+                )
+            else:
+                vllm_config.attention_config.backend = AttentionBackendEnum.TRITON_ATTN
+                logger.info(
+                    "Gemma4 model has heterogeneous head dimensions "
+                    "%s. FA4 not available, forcing TRITON_ATTN backend.",
+                    head_dims,
+                )
 
 
 class DiffusionGemmaModelForBlockDiffusionConfig(VerifyAndUpdateConfig):
